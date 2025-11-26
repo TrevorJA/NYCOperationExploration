@@ -8,10 +8,14 @@ This module provides:
 """
 
 import json
+import sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from SALib.sample import sobol as sobol_sample
+
+# Add parent directory to path for imports when running as script
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pywrdrb.parameters.nyc_operations_config import NYCOperationsConfig
 

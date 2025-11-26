@@ -8,10 +8,14 @@ This module provides:
 """
 
 import os
+import sys
 import glob
 import math
 import numpy as np
 from pathlib import Path
+
+# Add parent directory to path for imports when running as script
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pywrdrb
 
