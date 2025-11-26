@@ -1,0 +1,374 @@
+"""
+Calculate performance metrics for sensitivity analysis.
+
+This module provides:
+- Modular metric extraction from simulation outputs
+- Aggregation across samples
+- Metric storage utilities
+
+Metrics are designed to be easily extensible - just add new functions
+and register them in METRIC_FUNCTIONS.
+"""
+
+import os
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+import pywrdrb
+
+from config import (
+    SIMULATIONS_DIR,
+    METRICS_DIR,
+    NYC_RESERVOIRS,
+    NYC_TOTAL_CAPACITY,
+    ZONE_NAMES,
+    METRICS_TO_CALCULATE
+)
+
+
+# =============================================================================
+# METRIC CALCULATION FUNCTIONS
+# =============================================================================
+
+def calculate_montague_min_flow(data: dict) -> float:
+    """
+    Calculate minimum daily flow at Montague.
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary containing loaded simulation data
+
+    Returns
+    -------
+    float : Minimum Montague flow in MGD
+    """
+    montague_flow = data["major_flow"]["delMontague"]
+    return float(montague_flow.min())
+
+
+def calculate_pct_time_drought_watch(data: dict) -> float:
+    """
+    Calculate percentage of time in Drought Watch or worse (zones 5-6).
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary containing loaded simulation data
+
+    Returns
+    -------
+    float : Percentage of days in Drought Watch or worse
+    """
+    nyc_zone = data["res_level"]["nyc"]
+    n_days = len(nyc_zone)
+    n_watch_or_worse = (nyc_zone >= 5).sum()
+    return 100.0 * float(n_watch_or_worse) / n_days
+
+
+def calculate_pct_time_drought_warning(data: dict) -> float:
+    """
+    Calculate percentage of time in Drought Warning or worse (zones 4-6).
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary containing loaded simulation data
+
+    Returns
+    -------
+    float : Percentage of days in Drought Warning or worse
+    """
+    nyc_zone = data["res_level"]["nyc"]
+    n_days = len(nyc_zone)
+    n_warning_or_worse = (nyc_zone >= 4).sum()
+    return 100.0 * float(n_warning_or_worse) / n_days
+
+
+def calculate_pct_time_drought_emergency(data: dict) -> float:
+    """
+    Calculate percentage of time in Drought Emergency (zone 6).
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary containing loaded simulation data
+
+    Returns
+    -------
+    float : Percentage of days in Drought Emergency
+    """
+    nyc_zone = data["res_level"]["nyc"]
+    n_days = len(nyc_zone)
+    n_emergency = (nyc_zone == 6).sum()
+    return 100.0 * float(n_emergency) / n_days
+
+
+def calculate_nyc_min_storage_pct(data: dict) -> float:
+    """
+    Calculate minimum NYC combined storage as percentage of capacity.
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary containing loaded simulation data
+
+    Returns
+    -------
+    float : Minimum storage percentage
+    """
+    nyc_storage = data["res_storage"][NYC_RESERVOIRS].sum(axis=1)
+    min_storage = nyc_storage.min()
+    return 100.0 * float(min_storage) / NYC_TOTAL_CAPACITY
+
+
+# =============================================================================
+# METRIC REGISTRY
+# =============================================================================
+
+# Register all metric functions here
+# Key = metric name, Value = function that takes data dict and returns float
+METRIC_FUNCTIONS = {
+    "montague_min_flow_mgd": calculate_montague_min_flow,
+    "pct_time_drought_watch": calculate_pct_time_drought_watch,
+    "pct_time_drought_warning": calculate_pct_time_drought_warning,
+    "pct_time_drought_emergency": calculate_pct_time_drought_emergency,
+    "nyc_min_storage_pct": calculate_nyc_min_storage_pct,
+}
+
+
+# =============================================================================
+# DATA LOADING
+# =============================================================================
+
+def load_simulation_data(output_file: str) -> dict:
+    """
+    Load simulation output data needed for metric calculations.
+
+    Parameters
+    ----------
+    output_file : str
+        Path to HDF5 output file
+
+    Returns
+    -------
+    dict : Dictionary containing loaded data series
+    """
+    # Load data using pywrdrb
+    data_obj = pywrdrb.Data()
+
+    # Load required results sets
+    results_sets = ['major_flow', 'res_storage', 'res_level']
+
+    data_obj.load_output(
+        output_filenames=[output_file],
+        results_sets=results_sets
+    )
+
+    # Get the dataset key (should be only one)
+    dataset_key = list(data_obj.major_flow.keys())[0]
+    realization = 0  # Single realization for sensitivity analysis
+
+    # Extract relevant data series
+    data = {
+        "major_flow": data_obj.major_flow[dataset_key][realization],
+        "res_storage": data_obj.res_storage[dataset_key][realization],
+        "res_level": data_obj.res_level[dataset_key][realization],
+    }
+
+    return data
+
+
+# =============================================================================
+# METRIC CALCULATION
+# =============================================================================
+
+def calculate_sample_metrics(sample_id: int, output_file: str,
+                             metrics: list = None) -> dict:
+    """
+    Calculate all performance metrics for a single simulation sample.
+
+    Parameters
+    ----------
+    sample_id : int
+        Sample identifier
+    output_file : str
+        Path to HDF5 output file
+    metrics : list, optional
+        List of metric names to calculate. If None, uses METRICS_TO_CALCULATE from config.
+
+    Returns
+    -------
+    dict : Dictionary of metric values (includes sample_id)
+    """
+    if metrics is None:
+        metrics = METRICS_TO_CALCULATE
+
+    result = {"sample_id": sample_id}
+
+    try:
+        # Load simulation data
+        data = load_simulation_data(output_file)
+
+        # Calculate each metric
+        for metric_name in metrics:
+            if metric_name not in METRIC_FUNCTIONS:
+                print(f"  Warning: Unknown metric '{metric_name}', skipping")
+                result[metric_name] = np.nan
+                continue
+
+            try:
+                value = METRIC_FUNCTIONS[metric_name](data)
+                result[metric_name] = value
+            except Exception as e:
+                print(f"  Error calculating {metric_name} for sample {sample_id}: {e}")
+                result[metric_name] = np.nan
+
+    except Exception as e:
+        print(f"  Error loading data for sample {sample_id}: {e}")
+        for metric_name in metrics:
+            result[metric_name] = np.nan
+
+    return result
+
+
+def calculate_all_metrics(simulation_results: pd.DataFrame = None,
+                          metrics: list = None) -> pd.DataFrame:
+    """
+    Calculate metrics for all completed simulations.
+
+    Parameters
+    ----------
+    simulation_results : pd.DataFrame, optional
+        DataFrame with sample_id and output_file columns.
+        If None, scans the simulations directory.
+    metrics : list, optional
+        List of metric names to calculate.
+
+    Returns
+    -------
+    pd.DataFrame : Metrics for all samples
+    """
+    if simulation_results is None:
+        # Scan output directory for simulation files
+        output_files = sorted(SIMULATIONS_DIR.glob("sample_*.hdf5"))
+        simulation_results = pd.DataFrame([
+            {
+                "sample_id": int(f.stem.split("_")[1]),
+                "output_file": str(f),
+                "status": "success"
+            }
+            for f in output_files
+        ])
+
+    # Filter to successful simulations
+    if "status" in simulation_results.columns:
+        successful = simulation_results[simulation_results["status"] == "success"]
+    else:
+        successful = simulation_results
+
+    n_total = len(successful)
+    print(f"Calculating metrics for {n_total} samples...")
+
+    all_metrics = []
+
+    for i, (_, row) in enumerate(successful.iterrows()):
+        sample_id = row["sample_id"]
+        output_file = row["output_file"]
+
+        if (i + 1) % 50 == 0 or i == 0:
+            print(f"  Processing sample {i + 1}/{n_total} (ID {sample_id})")
+
+        metrics_dict = calculate_sample_metrics(sample_id, output_file, metrics)
+        all_metrics.append(metrics_dict)
+
+    df = pd.DataFrame(all_metrics)
+
+    # Report summary
+    print(f"\nMetrics Summary:")
+    for col in df.columns:
+        if col != "sample_id":
+            valid = df[col].notna().sum()
+            print(f"  {col}: {valid}/{n_total} valid values")
+
+    return df
+
+
+def save_metrics(metrics_df: pd.DataFrame, filename: str = "metrics"):
+    """
+    Save metrics DataFrame to CSV.
+
+    Parameters
+    ----------
+    metrics_df : pd.DataFrame
+        Metrics DataFrame
+    filename : str
+        Output filename (without extension)
+    """
+    output_path = METRICS_DIR / f"{filename}.csv"
+    metrics_df.to_csv(output_path, index=False)
+    print(f"Saved metrics to {output_path}")
+
+
+def load_metrics(filename: str = "metrics") -> pd.DataFrame:
+    """
+    Load metrics DataFrame from CSV.
+
+    Parameters
+    ----------
+    filename : str
+        Input filename (without extension)
+
+    Returns
+    -------
+    pd.DataFrame
+    """
+    return pd.read_csv(METRICS_DIR / f"{filename}.csv")
+
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+def list_available_metrics():
+    """Print list of available metrics."""
+    print("Available Metrics:")
+    print("-" * 60)
+    for name, func in METRIC_FUNCTIONS.items():
+        doc = func.__doc__.split("\n")[1].strip() if func.__doc__ else "No description"
+        print(f"  {name}")
+        print(f"    {doc}")
+    print("-" * 60)
+
+
+def add_custom_metric(name: str, func: callable):
+    """
+    Add a custom metric function to the registry.
+
+    Parameters
+    ----------
+    name : str
+        Metric name
+    func : callable
+        Function that takes data dict and returns float
+    """
+    METRIC_FUNCTIONS[name] = func
+    print(f"Added custom metric: {name}")
+
+
+if __name__ == "__main__":
+    # List available metrics
+    list_available_metrics()
+
+    # Test metric calculation on a sample file (if exists)
+    test_file = SIMULATIONS_DIR / "sample_000000.hdf5"
+    if test_file.exists():
+        print(f"\nTesting metrics on {test_file}...")
+        metrics = calculate_sample_metrics(0, str(test_file))
+        print("Results:")
+        for k, v in metrics.items():
+            print(f"  {k}: {v}")
+    else:
+        print(f"\nNo test file found at {test_file}")
+        print("Run simulations first to test metric calculation.")
