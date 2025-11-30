@@ -5,13 +5,9 @@ This script generates Sobol sequence samples using SALib and saves them
 for use in subsequent simulation runs.
 
 Usage:
-    python 01_generate_samples.py [--n-samples N]
-
-Example:
-    python 01_generate_samples.py --n-samples 128
+    python 01_generate_samples.py
 """
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -26,11 +22,8 @@ from methods.sampling import (
 )
 
 
-def main(n_samples: int = None):
+def main():
     """Generate and save Sobol samples."""
-
-    if n_samples is None:
-        n_samples = N_SOBOL_SAMPLES
 
     print("=" * 70)
     print("SOBOL SAMPLE GENERATION")
@@ -41,7 +34,7 @@ def main(n_samples: int = None):
 
     # Generate samples
     print("\nGenerating Sobol sequence...")
-    samples, problem = generate_sobol_samples(n_samples)
+    samples, problem = generate_sobol_samples(N_SOBOL_SAMPLES)
 
     # Print summary
     print_sample_summary(samples, problem)
@@ -57,9 +50,4 @@ def main(n_samples: int = None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate Sobol samples for sensitivity analysis")
-    parser.add_argument("--n-samples", type=int, default=None,
-                        help=f"Number of base samples N (default: {N_SOBOL_SAMPLES} from config)")
-
-    args = parser.parse_args()
-    main(args.n_samples)
+    main()

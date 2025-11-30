@@ -24,7 +24,9 @@ from config import (
     END_DATE,
     INFLOW_TYPE,
     SIMULATIONS_DIR,
-    N_SAMPLES_PER_BATCH
+    N_SAMPLES_PER_BATCH,
+    USE_TRIMMED_MODEL,
+    PRESIM_FILE,
 )
 
 # Conditional MPI import
@@ -51,7 +53,9 @@ def run_single_simulation(sample_id: int, nyc_config,
                           start_date: str = START_DATE,
                           end_date: str = END_DATE,
                           inflow_type: str = INFLOW_TYPE,
-                          cleanup_model: bool = True) -> dict:
+                          cleanup_model: bool = True,
+                          use_trimmed_model: bool = USE_TRIMMED_MODEL,
+                          presim_file: Path = PRESIM_FILE) -> dict:
     """
     Run a single Pywr-DRB simulation with custom NYC operations config.
 
@@ -69,6 +73,10 @@ def run_single_simulation(sample_id: int, nyc_config,
         Type of inflow data to use
     cleanup_model : bool
         If True, delete model JSON file after simulation
+    use_trimmed_model : bool
+        If True, use trimmed model with pre-simulated releases for faster runtime
+    presim_file : Path
+        Path to pre-simulated releases CSV file (required if use_trimmed_model=True)
 
     Returns
     -------
@@ -82,6 +90,16 @@ def run_single_simulation(sample_id: int, nyc_config,
         model_options = {
             "nyc_nj_demand_source": "historical",
         }
+
+        # Add trimmed model options if enabled
+        if use_trimmed_model:
+            if not presim_file.exists():
+                raise FileNotFoundError(
+                    f"Pre-simulated releases file not found: {presim_file}\n"
+                    f"Run 00_generate_presimulated_releases.py first."
+                )
+            model_options["use_trimmed_model"] = True
+            model_options["presimulated_releases_file"] = str(presim_file)
 
         # Build model with custom NYC operations config
         mb = pywrdrb.ModelBuilder(
@@ -99,9 +117,12 @@ def run_single_simulation(sample_id: int, nyc_config,
         # Load model
         model = pywrdrb.Model.load(model_file)
 
-        # Get parameters to export (subset for efficiency)
+        # Get parameters to export using results_set filtering
+        # This ensures compatibility with pywrdrb.Data() loading
         all_parameter_names = [p.name for p in model.parameters if p.name]
-        export_param_names = _get_sensitivity_export_parameters(all_parameter_names)
+        export_param_names = get_parameter_subset_to_export(
+            all_parameter_names, SENSITIVITY_RESULTS_SETS
+        )
         export_parameters = [p for p in model.parameters if p.name in export_param_names]
 
         # Setup output recorder
@@ -133,37 +154,47 @@ def run_single_simulation(sample_id: int, nyc_config,
         }
 
 
-def _get_sensitivity_export_parameters(all_parameter_names: list) -> list:
+def get_parameter_subset_to_export(all_parameter_names, results_set_subset):
     """
-    Get subset of parameters needed for sensitivity metrics.
+    Get subset of parameter names that match specified results_sets.
 
-    Focus on:
-    - Major flows (for Montague/Trenton flow metrics)
-    - Reservoir storage (for NYC storage metrics)
-    - Drought zone levels (for drought metrics)
-    - MRF targets and releases
+    Uses pywrdrb Output loader's filtering to ensure compatibility
+    with pywrdrb.Data() loading.
+
+    Parameters
+    ----------
+    all_parameter_names : list
+        List of all parameter names from the model
+    results_set_subset : list
+        List of results_set names to export (e.g., ['major_flow', 'res_storage', 'res_level'])
+
+    Returns
+    -------
+    list : List of parameter names to export
     """
-    prefixes = [
-        "major_flow_",
-        "res_storage_",
-        "res_level_",
-        "mrf_target_",
-        "delivery_",
-        "demand_",
-    ]
+    output_loader = pywrdrb.load.Output(output_filenames=[])
+    keep_keys = []
+    for results_set in results_set_subset:
+        if results_set == "all":
+            continue
 
-    export_params = []
-    for name in all_parameter_names:
-        if any(name.startswith(p) for p in prefixes):
-            export_params.append(name)
+        keys_subset, _ = output_loader.get_keys_and_column_names_for_results_set(
+            all_parameter_names, results_set
+        )
+        keep_keys.extend(keys_subset)
+    return keep_keys
 
-    return export_params
+
+# Results sets needed for sensitivity metrics
+SENSITIVITY_RESULTS_SETS = ['major_flow', 'res_storage', 'res_level']
 
 
 def run_parallel_simulations_mpi(samples: np.ndarray, problem: dict,
                                   start_date: str = START_DATE,
                                   end_date: str = END_DATE,
-                                  inflow_type: str = INFLOW_TYPE):
+                                  inflow_type: str = INFLOW_TYPE,
+                                  use_trimmed_model: bool = USE_TRIMMED_MODEL,
+                                  presim_file: Path = PRESIM_FILE):
     """
     Run all simulations in parallel using MPI.
 
@@ -181,6 +212,10 @@ def run_parallel_simulations_mpi(samples: np.ndarray, problem: dict,
         Simulation end date
     inflow_type : str
         Type of inflow data
+    use_trimmed_model : bool
+        If True, use trimmed model with pre-simulated releases
+    presim_file : Path
+        Path to pre-simulated releases CSV file
 
     Returns
     -------
@@ -203,6 +238,7 @@ def run_parallel_simulations_mpi(samples: np.ndarray, problem: dict,
         print(f"  Total samples: {n_samples}")
         print(f"  MPI ranks: {size}")
         print(f"  Samples per rank: ~{n_samples // size}")
+        print(f"  Trimmed model: {use_trimmed_model}")
 
     # Distribute samples across ranks
     all_sample_ids = list(range(n_samples))
@@ -227,7 +263,9 @@ def run_parallel_simulations_mpi(samples: np.ndarray, problem: dict,
             nyc_config=config,
             start_date=start_date,
             end_date=end_date,
-            inflow_type=inflow_type
+            inflow_type=inflow_type,
+            use_trimmed_model=use_trimmed_model,
+            presim_file=presim_file
         )
 
         local_results.append(result)
@@ -268,7 +306,9 @@ def run_simulations_serial(samples: np.ndarray, problem: dict,
                            start_date: str = START_DATE,
                            end_date: str = END_DATE,
                            inflow_type: str = INFLOW_TYPE,
-                           sample_ids: list = None) -> list:
+                           sample_ids: list = None,
+                           use_trimmed_model: bool = USE_TRIMMED_MODEL,
+                           presim_file: Path = PRESIM_FILE) -> list:
     """
     Run simulations serially (for testing or small runs).
 
@@ -286,6 +326,10 @@ def run_simulations_serial(samples: np.ndarray, problem: dict,
         Type of inflow data
     sample_ids : list, optional
         Specific sample IDs to run. If None, run all samples.
+    use_trimmed_model : bool
+        If True, use trimmed model with pre-simulated releases
+    presim_file : Path
+        Path to pre-simulated releases CSV file
 
     Returns
     -------
@@ -298,6 +342,7 @@ def run_simulations_serial(samples: np.ndarray, problem: dict,
 
     n_samples = len(sample_ids)
     print(f"Running {n_samples} simulations serially...")
+    print(f"  Trimmed model: {use_trimmed_model}")
 
     results = []
 
@@ -314,7 +359,9 @@ def run_simulations_serial(samples: np.ndarray, problem: dict,
             nyc_config=config,
             start_date=start_date,
             end_date=end_date,
-            inflow_type=inflow_type
+            inflow_type=inflow_type,
+            use_trimmed_model=use_trimmed_model,
+            presim_file=presim_file
         )
 
         results.append(result)

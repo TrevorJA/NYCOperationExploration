@@ -6,16 +6,8 @@ Sobol indices for each metric using the SALib library.
 
 Usage:
     python 04_analyze_sensitivity.py
-
-Options:
-    --all-metrics    Include all available metrics (not just configured ones)
-    --no-second-order    Skip second-order interaction indices
-
-Example:
-    python 04_analyze_sensitivity.py --all-metrics
 """
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -31,8 +23,17 @@ from methods.analysis import (
     print_sobol_summary
 )
 
+# =============================================================================
+# SCRIPT SETTINGS (modify these as needed)
+# =============================================================================
+# Set to True to analyze all metrics (not just those in METRICS_TO_CALCULATE)
+ANALYZE_ALL_METRICS = False
 
-def main(all_metrics: bool = False, calc_second_order: bool = True):
+# Set to False to skip second-order interaction indices (faster)
+CALC_SECOND_ORDER = True
+
+
+def main():
     """Compute Sobol indices for all metrics."""
 
     print("=" * 70)
@@ -58,7 +59,7 @@ def main(all_metrics: bool = False, calc_second_order: bool = True):
         print("  Some simulations may have failed. Proceeding with available data...")
 
     # Select metrics
-    if all_metrics:
+    if ANALYZE_ALL_METRICS:
         metric_columns = [c for c in metrics_df.columns if c != "sample_id"]
     else:
         metric_columns = [m for m in METRICS_TO_CALCULATE if m in metrics_df.columns]
@@ -69,14 +70,14 @@ def main(all_metrics: bool = False, calc_second_order: bool = True):
 
     # Calculate Sobol indices
     print("\nCalculating Sobol indices...")
-    print(f"  Second-order interactions: {calc_second_order}")
+    print(f"  Second-order interactions: {CALC_SECOND_ORDER}")
 
     sobol_results = calculate_sobol_indices(
         samples,
         metrics_df,
         problem,
         metric_columns=metric_columns,
-        calc_second_order=calc_second_order,
+        calc_second_order=CALC_SECOND_ORDER,
         n_bootstrap=1000,
         confidence_level=0.95
     )
@@ -96,11 +97,4 @@ def main(all_metrics: bool = False, calc_second_order: bool = True):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compute Sobol sensitivity indices")
-    parser.add_argument("--all-metrics", action="store_true",
-                        help="Analyze all available metrics, not just configured ones")
-    parser.add_argument("--no-second-order", action="store_true",
-                        help="Skip second-order interaction indices")
-
-    args = parser.parse_args()
-    main(all_metrics=args.all_metrics, calc_second_order=not args.no_second_order)
+    main()

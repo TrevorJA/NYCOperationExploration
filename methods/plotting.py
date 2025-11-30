@@ -99,7 +99,7 @@ def plot_sobol_bars(sobol_results: dict, metric: str,
         if filename is None:
             filename = f"sobol_bars_{metric}"
         plt.savefig(FIGURES_DIR / f"{filename}.png", dpi=DPI_HIGH, bbox_inches="tight")
-        plt.savefig(FIGURES_DIR / f"{filename}.pdf", bbox_inches="tight")
+        # plt.savefig(FIGURES_DIR / f"{filename}.pdf", bbox_inches="tight")
         print(f"Saved: {FIGURES_DIR / filename}.png")
 
     return fig, ax
@@ -172,7 +172,7 @@ def plot_tornado(sobol_results: dict, metric: str,
         if filename is None:
             filename = f"tornado_{metric}_{index_type}"
         plt.savefig(FIGURES_DIR / f"{filename}.png", dpi=DPI_HIGH, bbox_inches="tight")
-        plt.savefig(FIGURES_DIR / f"{filename}.pdf", bbox_inches="tight")
+        # plt.savefig(FIGURES_DIR / f"{filename}.pdf", bbox_inches="tight")
         print(f"Saved: {FIGURES_DIR / filename}.png")
 
     return fig, ax
@@ -245,8 +245,7 @@ def plot_multi_metric_heatmap(sobol_results: dict,
     if save:
         plt.savefig(FIGURES_DIR / f"heatmap_{index_type}.png",
                     dpi=DPI_HIGH, bbox_inches="tight")
-        plt.savefig(FIGURES_DIR / f"heatmap_{index_type}.pdf",
-                    bbox_inches="tight")
+
         print(f"Saved: {FIGURES_DIR / f'heatmap_{index_type}.png'}")
 
     return fig, ax
@@ -315,7 +314,7 @@ def plot_interaction_matrix(sobol_results: dict, metric: str,
         if filename is None:
             filename = f"interactions_{metric}"
         plt.savefig(FIGURES_DIR / f"{filename}.png", dpi=DPI_HIGH, bbox_inches="tight")
-        plt.savefig(FIGURES_DIR / f"{filename}.pdf", bbox_inches="tight")
+        # plt.savefig(FIGURES_DIR / f"{filename}.pdf", bbox_inches="tight")
         print(f"Saved: {FIGURES_DIR / filename}.png")
 
     return fig, ax

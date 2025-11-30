@@ -9,12 +9,8 @@ This script generates publication-quality figures including:
 
 Usage:
     python 05_visualize_results.py
-
-Example:
-    python 05_visualize_results.py
 """
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -33,8 +29,14 @@ from methods.plotting import (
 
 import matplotlib.pyplot as plt
 
+# =============================================================================
+# SCRIPT SETTINGS (modify these as needed)
+# =============================================================================
+# Set to a list of metric names to only plot specific metrics, or None for all
+METRICS_TO_PLOT = None  # e.g., ["montague_min_flow_mgd", "nyc_min_storage_pct"]
 
-def main(metrics: list = None):
+
+def main():
     """Generate all visualization figures."""
 
     print("=" * 70)
@@ -55,8 +57,8 @@ def main(metrics: list = None):
     print(f"  Found {len(valid_metrics)} metrics with valid results")
 
     # Filter to requested metrics if specified
-    if metrics is not None:
-        valid_metrics = [m for m in metrics if m in valid_metrics]
+    if METRICS_TO_PLOT is not None:
+        valid_metrics = [m for m in METRICS_TO_PLOT if m in valid_metrics]
 
     print(f"\nGenerating figures for metrics:")
     for m in valid_metrics:
@@ -82,9 +84,4 @@ def main(metrics: list = None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate sensitivity analysis figures")
-    parser.add_argument("--metrics", nargs="+", default=None,
-                        help="Specific metrics to plot (default: all)")
-
-    args = parser.parse_args()
-    main(metrics=args.metrics)
+    main()

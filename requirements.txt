@@ -1,0 +1,15 @@
+# NYC Operations Sensitivity Analysis Requirements
+
+# Pywr-DRB from GitHub (nyc_opt branch)
+pywrdrb @ git+https://github.com/Pywr-DRB/Pywr-DRB.git@nyc_opt
+
+# Sensitivity analysis
+SALib
+
+# Core dependencies (typically installed with pywrdrb, but listed for clarity)
+numpy
+pandas
+matplotlib
+
+# Optional: MPI for parallel execution on HPC
+# mpi4py
