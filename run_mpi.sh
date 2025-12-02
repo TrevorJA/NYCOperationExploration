@@ -2,7 +2,7 @@
 #SBATCH --job-name=NYCOps
 #SBATCH --output=./logs/NYCOps.out
 #SBATCH --error=./logs/NYCOps.err
-#SBATCH --nodes=8
+#SBATCH --nodes=10
 #SBATCH --ntasks-per-node=40
 #SBATCH --time=24:00:00
 #SBATCH --mem=0
@@ -13,8 +13,8 @@ source venv/bin/activate
 np=$(($SLURM_NTASKS_PER_NODE * $SLURM_NNODES))
 
 # Workflow flags (all true by default)
-PRESIM=${PRESIM:-false}
-GENERATE=${GENERATE:-false}
+PRESIM=${PRESIM:-true}
+GENERATE=${GENERATE:-true}
 SIMULATE=${SIMULATE:-true}
 METRICS=${METRICS:-true}
 ANALYZE=${ANALYZE:-true}
@@ -31,6 +31,6 @@ echo "Running NYC Operations SA with $np ranks on $SLURM_NNODES nodes"
 [ "$SIMULATE" = true ] && mpirun -np $np python3 02_run_simulations.py
 [ "$METRICS" = true ] && mpirun -np $np python3 03_calculate_metrics.py
 [ "$ANALYZE" = true ] && python3 04_analyze_sensitivity.py
-[ "$VISUALIZE" = true ] && python3 05_visualize_results.py
+[ "$VISUALIZE" = true ] && python3 06_pareto_analysis.py #&& python3 05_visualize_results.py
 
 echo "Workflow complete"

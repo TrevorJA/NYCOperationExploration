@@ -36,9 +36,9 @@ for d in [OUTPUT_DIR, SAMPLES_DIR, SIMULATIONS_DIR, METRICS_DIR, ANALYSIS_DIR, F
 # =============================================================================
 # SIMULATION SETTINGS
 # =============================================================================
-START_DATE = "1970-01-01"
-END_DATE = "2022-12-31"
-INFLOW_TYPE = "pub_nhmv10_BC_withObsScaled"
+START_DATE = "1979-10-01"
+END_DATE = "2021-12-31"
+INFLOW_TYPE = "wrfaorc_withObsScaled"
 
 # =============================================================================
 # TRIMMED MODEL SETTINGS
