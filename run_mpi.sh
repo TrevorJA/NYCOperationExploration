@@ -2,7 +2,7 @@
 #SBATCH --job-name=NYCOps
 #SBATCH --output=./logs/NYCOps.out
 #SBATCH --error=./logs/NYCOps.err
-#SBATCH --nodes=4
+#SBATCH --nodes=8
 #SBATCH --ntasks-per-node=40
 #SBATCH --time=24:00:00
 #SBATCH --mem=0
@@ -13,8 +13,8 @@ source venv/bin/activate
 np=$(($SLURM_NTASKS_PER_NODE * $SLURM_NNODES))
 
 # Workflow flags (all true by default)
-PRESIM=${PRESIM:-true}
-GENERATE=${GENERATE:-true}
+PRESIM=${PRESIM:-false}
+GENERATE=${GENERATE:-false}
 SIMULATE=${SIMULATE:-true}
 METRICS=${METRICS:-true}
 ANALYZE=${ANALYZE:-true}

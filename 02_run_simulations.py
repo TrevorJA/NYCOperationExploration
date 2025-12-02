@@ -47,35 +47,59 @@ END_SAMPLE_IDX = None    # e.g., 10
 def main():
     """Run simulations for all Sobol samples."""
 
-    print("=" * 70)
-    print("PYWR-DRB SOBOL SENSITIVITY SIMULATIONS")
-    print("=" * 70)
-
-    # Check for pre-simulated releases if using trimmed model
-    if USE_TRIMMED_MODEL:
-        if not PRESIM_FILE.exists():
-            print("\nERROR: Trimmed model requires pre-simulated releases.")
-            print(f"  Expected file: {PRESIM_FILE}")
-            print("\nPlease run first:")
-            print("  python 00_generate_presimulated_releases.py")
-            sys.exit(1)
-        print(f"\nUsing TRIMMED MODEL (faster runtime)")
-        print(f"  Pre-simulated releases: {PRESIM_FILE}")
+    if MPI_AVAILABLE:
+        # MPI execution
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
     else:
-        print(f"\nUsing FULL MODEL")
+        # Serial execution
+        rank = 0
+
+    if rank == 0:
+        print("=" * 70)
+        print("PYWR-DRB SOBOL SENSITIVITY SIMULATIONS")
+        print("=" * 70)
+
+        # Check for pre-simulated releases if using trimmed model
+        if USE_TRIMMED_MODEL:
+            if not PRESIM_FILE.exists():
+                print("\nERROR: Trimmed model requires pre-simulated releases.")
+                print(f"  Expected file: {PRESIM_FILE}")
+                print("\nPlease run first:")
+                print("  python 00_generate_presimulated_releases.py")
+                sys.exit(1)
+            print(f"\nUsing TRIMMED MODEL (faster runtime)")
+            print(f"  Pre-simulated releases: {PRESIM_FILE}")
+        else:
+            print(f"\nUsing FULL MODEL")
 
     # Load samples
-    print("\nLoading samples...")
-    samples, problem = load_samples("sobol")
+    if rank == 0:
+        print("\nLoading samples...")
+        samples, problem = load_samples("sobol")
 
-    n_total = len(samples)
-    n_params = problem["num_vars"]
+        n_total = len(samples)
+        n_params = problem["num_vars"]
 
-    print(f"  Total samples: {n_total}")
-    print(f"  Parameters: {n_params}")
-    print(f"  Simulation period: {START_DATE} to {END_DATE}")
-    print(f"  Inflow type: {INFLOW_TYPE}")
-    print(f"  Model type: {'TRIMMED' if USE_TRIMMED_MODEL else 'FULL'}")
+        print(f"  Total samples: {n_total}")
+        print(f"  Parameters: {n_params}")
+        print(f"  Simulation period: {START_DATE} to {END_DATE}")
+        print(f"  Inflow type: {INFLOW_TYPE}")
+        print(f"  Model type: {'TRIMMED' if USE_TRIMMED_MODEL else 'FULL'}")
+    else:
+        samples = None
+        problem = None
+        n_total = None
+        n_params = None
+    
+    # Broadcast sample info to all ranks
+    if MPI_AVAILABLE:
+        samples = comm.bcast(samples, root=0)
+        problem = comm.bcast(problem, root=0)
+        n_total = comm.bcast(n_total, root=0)
+        n_params = comm.bcast(n_params, root=0)
+        comm.Barrier()
 
     # Determine sample range
     if START_SAMPLE_IDX is not None or END_SAMPLE_IDX is not None:
@@ -106,10 +130,6 @@ def main():
         save_simulation_results(results)
 
     else:
-        # MPI execution
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
 
         if rank == 0:
             print(f"\n  Execution mode: MPI PARALLEL")

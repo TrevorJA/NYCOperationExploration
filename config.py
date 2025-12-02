@@ -36,8 +36,8 @@ for d in [OUTPUT_DIR, SAMPLES_DIR, SIMULATIONS_DIR, METRICS_DIR, ANALYSIS_DIR, F
 # =============================================================================
 # SIMULATION SETTINGS
 # =============================================================================
-START_DATE = "2000-01-01"
-END_DATE = "2002-12-31"
+START_DATE = "1970-01-01"
+END_DATE = "2022-12-31"
 INFLOW_TYPE = "pub_nhmv10_BC_withObsScaled"
 
 # =============================================================================
@@ -53,7 +53,7 @@ PRESIM_FILE = PRESIM_DIR / "presimulated_releases_mgd.csv"
 # =============================================================================
 # SOBOL SAMPLING CONFIGURATION
 # =============================================================================
-N_SOBOL_SAMPLES = 2  # N in SALib terminology; total = N*(2D+2)
+N_SOBOL_SAMPLES = 256  # N in SALib terminology; total = N*(2D+2)
 RANDOM_SEED = 42  # For reproducibility
 
 
