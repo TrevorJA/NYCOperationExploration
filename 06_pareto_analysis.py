@@ -847,7 +847,7 @@ def plot_dynamics_comparison(dynamics, best_solutions, metrics_df, objective_nam
 
 def plot_best_solutions_dynamics(samples, problem, metrics_df, objective_names,
                                   maximize_flags, baseline_file,
-                                  start_date="1980-10-01", end_date="1983-10-01"):
+                                  start_date="1980-01-01", end_date="2022-10-01"):
     """
     Create dynamics plots for best solutions over a specified time period.
 
