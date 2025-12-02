@@ -11,6 +11,7 @@ analysis with 02_run_simulations.py.
 
 Usage:
     python 00_generate_presimulated_releases.py
+    python 00_generate_presimulated_releases.py --force  # Skip overwrite prompt
 
 The script will:
 1. Build and run a full Pywr-DRB model with default NYC operations
@@ -23,6 +24,7 @@ Note:
     It only needs to be run once per inflow_type/date range combination.
 """
 
+import argparse
 import os
 import sys
 import time
@@ -47,6 +49,10 @@ from config import (
 def main():
     """Generate pre-simulated releases for trimmed model mode."""
 
+    parser = argparse.ArgumentParser(description="Generate pre-simulated releases")
+    parser.add_argument("--force", action="store_true", help="Overwrite existing files without prompt")
+    args = parser.parse_args()
+
     print("=" * 70)
     print("GENERATE PRE-SIMULATED RELEASES FOR TRIMMED MODEL")
     print("=" * 70)
@@ -57,12 +63,15 @@ def main():
 
     # Check if presim file already exists
     if PRESIM_FILE.exists():
-        print(f"\nWARNING: Pre-simulated releases file already exists:")
-        print(f"  {PRESIM_FILE}")
-        response = input("Overwrite? (y/n): ").strip().lower()
-        if response != 'y':
-            print("Aborted.")
-            return
+        if args.force:
+            print(f"\nOverwriting existing pre-simulated releases file (--force)")
+        else:
+            print(f"\nWARNING: Pre-simulated releases file already exists:")
+            print(f"  {PRESIM_FILE}")
+            response = input("Overwrite? (y/n): ").strip().lower()
+            if response != 'y':
+                print("Aborted.")
+                return
 
     # Create output directory
     PRESIM_DIR.mkdir(parents=True, exist_ok=True)
