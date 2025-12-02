@@ -45,7 +45,7 @@ from pywrdrb.parameters.nyc_operations_config import NYCOperationsConfig
 OBJECTIVES = {
     "montague_flow_3day_min_mgd": True,   # Maximize 3-day min flow (higher = better for ecology)
     "nyc_min_storage_pct": True,          # Maximize minimum storage (higher = better for supply)
-    "nyc_monthly_delivery_min_mg": True,  # Maximize monthly delivery (higher = better reliability)
+    "max_nyc_monthly_shortage_pct": False, # Minimize maximum monthly shortage (lower = better reliability)
     "pct_time_drought_emergency": False,  # Minimize time in drought emergency
 }
 
@@ -205,7 +205,7 @@ def find_pareto_front(objectives_df, objective_names, maximize_flags):
 AXIS_LABELS = {
     "montague_flow_3day_min_mgd": "Montague Flow\n3-day Min (MGD)",
     "nyc_min_storage_pct": "NYC Min Storage\n(%)",
-    "nyc_monthly_delivery_min_mg": "NYC Monthly\nDelivery Min (MG)",
+    "max_nyc_monthly_shortage_pct": "Max NYC Monthly\nShortage (%)",
     "pct_time_drought_emergency": "% Time Drought\nEmergency",
 }
 
