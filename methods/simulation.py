@@ -185,7 +185,7 @@ def get_parameter_subset_to_export(all_parameter_names, results_set_subset):
 
 
 # Results sets needed for sensitivity metrics
-SENSITIVITY_RESULTS_SETS = ['major_flow', 'res_storage', 'res_level', 'ibt_diversions']
+SENSITIVITY_RESULTS_SETS = ['major_flow', 'res_storage', 'res_level', 'ibt_diversions', 'ibt_demands']
 
 
 def run_parallel_simulations_mpi(samples: np.ndarray, problem: dict,
