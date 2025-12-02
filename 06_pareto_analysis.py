@@ -388,6 +388,186 @@ def plot_parameter_boxplots(samples, pareto_mask, problem, figsize=(14, 6)):
     return fig
 
 
+def plot_pareto_2d_scatter(metrics_df, pareto_mask, objective_names, maximize_flags,
+                            baseline_metrics=None, figsize=(14, 10)):
+    """
+    Plot 2D scatter plots for all pairs of objectives showing Pareto front.
+
+    Parameters
+    ----------
+    metrics_df : pd.DataFrame
+        DataFrame with metric values
+    pareto_mask : np.ndarray
+        Boolean mask for Pareto-optimal solutions
+    objective_names : list
+        List of objective column names
+    maximize_flags : list
+        List of booleans for maximization direction
+    baseline_metrics : dict, optional
+        Dictionary of baseline metric values
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    from itertools import combinations
+
+    n_obj = len(objective_names)
+    pairs = list(combinations(range(n_obj), 2))
+    n_pairs = len(pairs)
+
+    # Determine grid layout
+    n_cols = min(3, n_pairs)
+    n_rows = (n_pairs + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
+    if n_pairs == 1:
+        axes = np.array([[axes]])
+    elif n_rows == 1:
+        axes = axes.reshape(1, -1)
+
+    for idx, (i, j) in enumerate(pairs):
+        row, col = idx // n_cols, idx % n_cols
+        ax = axes[row, col]
+
+        obj_x, obj_y = objective_names[i], objective_names[j]
+
+        # Plot dominated solutions (gray)
+        ax.scatter(metrics_df[obj_x][~pareto_mask],
+                   metrics_df[obj_y][~pareto_mask],
+                   c='gray', alpha=0.3, s=20, label='Dominated')
+
+        # Plot Pareto solutions (green)
+        ax.scatter(metrics_df[obj_x][pareto_mask],
+                   metrics_df[obj_y][pareto_mask],
+                   c='#2ca02c', alpha=0.8, s=50, edgecolors='black',
+                   linewidths=0.5, label='Pareto', zorder=5)
+
+        # Plot baseline if provided
+        if baseline_metrics is not None:
+            bx = baseline_metrics.get(obj_x)
+            by = baseline_metrics.get(obj_y)
+            if bx is not None and by is not None:
+                ax.scatter(bx, by, c='#1f77b4', s=150, marker='*',
+                           edgecolors='black', linewidths=1, label='Baseline', zorder=10)
+
+        # Labels
+        label_x = AXIS_LABELS.get(obj_x, obj_x.replace("_", " "))
+        label_y = AXIS_LABELS.get(obj_y, obj_y.replace("_", " "))
+        ax.set_xlabel(label_x.replace("\n", " "), fontsize=9)
+        ax.set_ylabel(label_y.replace("\n", " "), fontsize=9)
+
+        # Add arrows indicating optimization direction
+        dir_x = "→" if maximize_flags[i] else "←"
+        dir_y = "↑" if maximize_flags[j] else "↓"
+        ax.set_title(f'{dir_x} better | {dir_y} better', fontsize=8)
+
+        ax.grid(True, alpha=0.3)
+
+        if idx == 0:
+            ax.legend(loc='best', fontsize=7)
+
+    # Hide unused subplots
+    for idx in range(n_pairs, n_rows * n_cols):
+        row, col = idx // n_cols, idx % n_cols
+        axes[row, col].set_visible(False)
+
+    fig.suptitle('Pareto Front: 2D Objective Space Projections', fontsize=12, y=1.02)
+    plt.tight_layout()
+    return fig
+
+
+def plot_pareto_3d_scatter(metrics_df, pareto_mask, objective_names, maximize_flags,
+                            baseline_metrics=None, figsize=(12, 10)):
+    """
+    Plot 3D scatter plots for objective triplets showing Pareto front.
+
+    Parameters
+    ----------
+    metrics_df : pd.DataFrame
+        DataFrame with metric values
+    pareto_mask : np.ndarray
+        Boolean mask for Pareto-optimal solutions
+    objective_names : list
+        List of objective column names
+    maximize_flags : list
+        List of booleans for maximization direction
+    baseline_metrics : dict, optional
+        Dictionary of baseline metric values
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    list of matplotlib.figure.Figure
+    """
+    from itertools import combinations
+    from mpl_toolkits.mplot3d import Axes3D
+
+    n_obj = len(objective_names)
+    if n_obj < 3:
+        print("  Need at least 3 objectives for 3D plots")
+        return []
+
+    triplets = list(combinations(range(n_obj), 3))
+    figures = []
+
+    for i, j, k in triplets:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection='3d')
+
+        obj_x, obj_y, obj_z = objective_names[i], objective_names[j], objective_names[k]
+
+        # Plot dominated solutions (gray)
+        ax.scatter(metrics_df[obj_x][~pareto_mask],
+                   metrics_df[obj_y][~pareto_mask],
+                   metrics_df[obj_z][~pareto_mask],
+                   c='gray', alpha=0.2, s=15, label='Dominated')
+
+        # Plot Pareto solutions (green)
+        ax.scatter(metrics_df[obj_x][pareto_mask],
+                   metrics_df[obj_y][pareto_mask],
+                   metrics_df[obj_z][pareto_mask],
+                   c='#2ca02c', alpha=0.9, s=60, edgecolors='black',
+                   linewidths=0.5, label='Pareto', depthshade=True)
+
+        # Plot baseline if provided
+        if baseline_metrics is not None:
+            bx = baseline_metrics.get(obj_x)
+            by = baseline_metrics.get(obj_y)
+            bz = baseline_metrics.get(obj_z)
+            if bx is not None and by is not None and bz is not None:
+                ax.scatter(bx, by, bz, c='#1f77b4', s=200, marker='*',
+                           edgecolors='black', linewidths=1, label='Baseline')
+
+        # Labels
+        label_x = AXIS_LABELS.get(obj_x, obj_x.replace("_", " ")).replace("\n", " ")
+        label_y = AXIS_LABELS.get(obj_y, obj_y.replace("_", " ")).replace("\n", " ")
+        label_z = AXIS_LABELS.get(obj_z, obj_z.replace("_", " ")).replace("\n", " ")
+
+        ax.set_xlabel(label_x, fontsize=9, labelpad=10)
+        ax.set_ylabel(label_y, fontsize=9, labelpad=10)
+        ax.set_zlabel(label_z, fontsize=9, labelpad=10)
+
+        # Title with optimization directions
+        dir_x = "max" if maximize_flags[i] else "min"
+        dir_y = "max" if maximize_flags[j] else "min"
+        dir_z = "max" if maximize_flags[k] else "min"
+        ax.set_title(f'Pareto Front: 3D View\n({dir_x} {obj_x[:15]}..., {dir_y} {obj_y[:15]}..., {dir_z} {obj_z[:15]}...)',
+                     fontsize=10)
+
+        ax.legend(loc='upper left', fontsize=8)
+
+        # Adjust viewing angle for better visualization
+        ax.view_init(elev=20, azim=45)
+
+        figures.append((f"{obj_x[:10]}_{obj_y[:10]}_{obj_z[:10]}", fig))
+
+    return figures
+
+
 # =============================================================================
 # BEST SOLUTION ANALYSIS - FFMP ZONES AND MRF REQUIREMENTS
 # =============================================================================
@@ -641,17 +821,55 @@ def get_simulation_output_file(sample_id):
     return SIMULATIONS_DIR / f"sample_{sample_id:06d}.hdf5"
 
 
+def load_dynamics_data(output_file):
+    """
+    Load only the data needed for dynamics plotting (storage and flow).
+
+    This is a lightweight loader that only loads major_flow and res_storage,
+    avoiding errors from missing ibt_demands in older simulation outputs.
+
+    Parameters
+    ----------
+    output_file : str
+        Path to HDF5 output file
+
+    Returns
+    -------
+    dict : Dictionary with 'major_flow' and 'res_storage' DataFrames
+    """
+    import pywrdrb
+
+    data_obj = pywrdrb.Data()
+
+    # Only load the results sets needed for dynamics
+    results_sets = ['major_flow', 'res_storage']
+
+    data_obj.load_output(
+        output_filenames=[output_file],
+        results_sets=results_sets
+    )
+
+    # Get the dataset key (should be only one)
+    dataset_key = list(data_obj.major_flow.keys())[0]
+    realization = 0
+
+    return {
+        "major_flow": data_obj.major_flow[dataset_key][realization],
+        "res_storage": data_obj.res_storage[dataset_key][realization],
+    }
+
+
 def load_dynamics_for_samples(sample_ids, baseline_file):
     """
     Load simulation dynamics (NYC storage and Montague flow) for multiple samples.
-    
+
     Parameters
     ----------
     sample_ids : list
         List of sample IDs to load
     baseline_file : Path
         Path to baseline output file
-    
+
     Returns
     -------
     dict : {sample_id: {'nyc_storage': Series, 'montague_flow': Series}}
@@ -660,7 +878,7 @@ def load_dynamics_for_samples(sample_ids, baseline_file):
     # Load baseline
     print("  Loading baseline dynamics...")
     try:
-        baseline_data = load_simulation_data(str(baseline_file))
+        baseline_data = load_dynamics_data(str(baseline_file))
         nyc_storage = baseline_data['res_storage'][NYC_RESERVOIRS].sum(axis=1)
         montague_flow = baseline_data['major_flow']['delMontague']
         dynamics['baseline'] = {
@@ -671,7 +889,7 @@ def load_dynamics_for_samples(sample_ids, baseline_file):
     except Exception as e:
         print(f"    Error loading baseline: {e}")
         dynamics['baseline'] = None
-    
+
     # Load each sample
     for sample_id in sample_ids:
         output_file = get_simulation_output_file(sample_id)
@@ -679,9 +897,9 @@ def load_dynamics_for_samples(sample_ids, baseline_file):
             print(f"    Sample {sample_id}: output file not found")
             dynamics[sample_id] = None
             continue
-        
+
         try:
-            data = load_simulation_data(str(output_file))
+            data = load_dynamics_data(str(output_file))
             nyc_storage = data['res_storage'][NYC_RESERVOIRS].sum(axis=1)
             montague_flow = data['major_flow']['delMontague']
             dynamics[sample_id] = {
@@ -1032,8 +1250,38 @@ def main():
     plt.close(fig)
     print(f"  Saved: {outfile.name}")
 
-    # 4. FFMP zones and MRF for best solutions per objective
-    print("\n4. FFMP zones and MRF for best solutions...")
+    # 4. 2D Scatter plots of Pareto front
+    print("\n4. 2D scatter plots of Pareto front...")
+    # Use specific objectives for scatter plots as requested
+    scatter_objectives = ["nyc_min_storage_pct", "pct_time_drought_emergency", "max_nyc_monthly_shortage_pct"]
+    scatter_objectives = [obj for obj in scatter_objectives if obj in available_objectives]
+    scatter_maximize = [available_objectives[k] for k in scatter_objectives]
+
+    if len(scatter_objectives) >= 2:
+        fig = plot_pareto_2d_scatter(metrics_df, pareto_mask, scatter_objectives,
+                                      scatter_maximize, baseline_metrics=baseline_metrics)
+        outfile = FIGURES_DIR / "pareto_2d_scatter.png"
+        fig.savefig(outfile, dpi=DPI, bbox_inches='tight')
+        plt.close(fig)
+        print(f"  Saved: {outfile.name}")
+    else:
+        print("  Skipping 2D scatter plots - need at least 2 objectives")
+
+    # 5. 3D Scatter plots of Pareto front
+    print("\n5. 3D scatter plot of Pareto front...")
+    if len(scatter_objectives) >= 3:
+        figures_3d = plot_pareto_3d_scatter(metrics_df, pareto_mask, scatter_objectives,
+                                             scatter_maximize, baseline_metrics=baseline_metrics)
+        for name_suffix, fig in figures_3d:
+            outfile = FIGURES_DIR / f"pareto_3d_scatter_{name_suffix}.png"
+            fig.savefig(outfile, dpi=DPI, bbox_inches='tight')
+            plt.close(fig)
+            print(f"  Saved: {outfile.name}")
+    else:
+        print("  Skipping 3D scatter plots - need at least 3 objectives")
+
+    # 6. FFMP zones and MRF for best solutions per objective
+    print("\n6. FFMP zones and MRF for best solutions...")
     best_figures = plot_all_best_solutions_ffmp_mrf(
         samples, problem, metrics_df, objective_names, maximize_flags
     )
@@ -1045,8 +1293,8 @@ def main():
         plt.close(fig)
         print(f"  Saved: {outfile.name}")
 
-    # 5. Simulation dynamics for best solutions
-    print("\n5. Simulation dynamics for best solutions...")
+    # 7. Simulation dynamics for best solutions
+    print("\n7. Simulation dynamics for best solutions...")
     dynamics_fig = plot_best_solutions_dynamics(
         samples, problem, metrics_df, objective_names, maximize_flags,
         BASELINE_OUTPUT_FILE
