@@ -53,9 +53,12 @@ def calculate_montague_flow_3day_min(data: dict) -> float:
     return float(rolling_3day.min())
 
 
-def calculate_nyc_monthly_delivery_min(data: dict) -> float:
+def calculate_max_nyc_monthly_shortage_pct(data: dict) -> float:
     """
-    Calculate minimum monthly total NYC delivery.
+    Calculate maximum monthly NYC shortage as percentage of demand.
+
+    Shortage = max(0, demand - diversion). Returns maximum monthly shortage
+    as a percentage of total monthly demand.
 
     Parameters
     ----------
@@ -64,11 +67,23 @@ def calculate_nyc_monthly_delivery_min(data: dict) -> float:
 
     Returns
     -------
-    float : Minimum monthly NYC delivery in MG
+    float : Maximum monthly shortage as percentage of demand
     """
-    nyc_delivery = data["ibt_diversions"]["delivery_nyc"]
-    monthly_totals = nyc_delivery.resample('M').sum()
-    return float(monthly_totals.min())
+    nyc_demand = data["ibt_demands"]["demand_nyc"]
+    nyc_diversion = data["ibt_diversions"]["delivery_nyc"]
+
+    # Calculate daily shortage (demand - diversion, floored at 0)
+    daily_shortage = (nyc_demand - nyc_diversion).clip(lower=0)
+
+    # Resample to monthly totals
+    monthly_shortage = daily_shortage.resample('M').sum()
+    monthly_demand = nyc_demand.resample('M').sum()
+
+    # Calculate shortage as percentage of demand
+    # Avoid division by zero
+    monthly_shortage_pct = 100.0 * monthly_shortage / monthly_demand.replace(0, np.nan)
+
+    return float(monthly_shortage_pct.max())
 
 
 def calculate_pct_time_drought_emergency(data: dict) -> float:
@@ -117,7 +132,7 @@ def calculate_nyc_min_storage_pct(data: dict) -> float:
 METRIC_FUNCTIONS = {
     "montague_flow_3day_min_mgd": calculate_montague_flow_3day_min,
     "nyc_min_storage_pct": calculate_nyc_min_storage_pct,
-    "nyc_monthly_delivery_min_mg": calculate_nyc_monthly_delivery_min,
+    "max_nyc_monthly_shortage_pct": calculate_max_nyc_monthly_shortage_pct,
     "pct_time_drought_emergency": calculate_pct_time_drought_emergency,
 }
 
@@ -153,7 +168,7 @@ def load_simulation_data(output_file: str, start_date: str = None, end_date: str
     data_obj = pywrdrb.Data()
 
     # Load required results sets
-    results_sets = ['major_flow', 'res_storage', 'res_level', 'ibt_diversions']
+    results_sets = ['major_flow', 'res_storage', 'res_level', 'ibt_diversions', 'ibt_demands']
 
     data_obj.load_output(
         output_filenames=[output_file],
@@ -170,6 +185,7 @@ def load_simulation_data(output_file: str, start_date: str = None, end_date: str
         "res_storage": data_obj.res_storage[dataset_key][realization],
         "res_level": data_obj.res_level[dataset_key][realization],
         "ibt_diversions": data_obj.ibt_diversions[dataset_key][realization],
+        "ibt_demands": data_obj.ibt_demands[dataset_key][realization],
     }
 
     # Determine start date with warmup offset

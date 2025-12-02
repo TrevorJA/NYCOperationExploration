@@ -22,7 +22,7 @@ from methods.analysis import load_sobol_results, print_sobol_summary
 from methods.plotting import (
     plot_sobol_bars,
     plot_tornado,
-    plot_multi_metric_heatmap,N
+    plot_multi_metric_heatmap,
     plot_interaction_matrix,
     generate_all_figures
 )

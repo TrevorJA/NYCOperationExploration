@@ -444,10 +444,10 @@ def print_config_summary():
 
 # List of metrics to calculate (can be extended)
 METRICS_TO_CALCULATE = [
-    "montague_flow_3day_min_mgd",    # Ecological flow protection
-    "nyc_min_storage_pct",            # Water supply vulnerability
-    "nyc_monthly_delivery_min_mg",    # Water supply reliability
-    "pct_time_drought_emergency",     # Drought resilience
+    "montague_flow_3day_min_mgd",      # Ecological flow protection
+    "nyc_min_storage_pct",              # Water supply vulnerability
+    "max_nyc_monthly_shortage_pct",     # Water supply reliability (max monthly shortage %)
+    "pct_time_drought_emergency",       # Drought resilience
 ]
 
 
