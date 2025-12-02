@@ -24,7 +24,6 @@ from config import (
     END_DATE,
     INFLOW_TYPE,
     SIMULATIONS_DIR,
-    N_SAMPLES_PER_BATCH,
     USE_TRIMMED_MODEL,
     PRESIM_FILE,
 )
@@ -186,7 +185,7 @@ def get_parameter_subset_to_export(all_parameter_names, results_set_subset):
 
 
 # Results sets needed for sensitivity metrics
-SENSITIVITY_RESULTS_SETS = ['major_flow', 'res_storage', 'res_level']
+SENSITIVITY_RESULTS_SETS = ['major_flow', 'res_storage', 'res_level', 'ibt_diversions']
 
 
 def run_parallel_simulations_mpi(samples: np.ndarray, problem: dict,

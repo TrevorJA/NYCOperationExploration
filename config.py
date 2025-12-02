@@ -56,10 +56,6 @@ PRESIM_FILE = PRESIM_DIR / "presimulated_releases_mgd.csv"
 N_SOBOL_SAMPLES = 2  # N in SALib terminology; total = N*(2D+2)
 RANDOM_SEED = 42  # For reproducibility
 
-# =============================================================================
-# MPI / PARALLEL SETTINGS
-# =============================================================================
-N_SAMPLES_PER_BATCH = 5  # Memory management for batch processing
 
 # =============================================================================
 # NYC RESERVOIR CONSTANTS
@@ -220,7 +216,7 @@ PARAMETER_GROUPS = {
         }
     },
     "flood": {
-        "enabled": True,
+        "enabled": False,
         "description": "Flood control release limits",
         "parameters": {
             "flood_max_cannonsville": {
@@ -250,37 +246,37 @@ PARAMETER_GROUPS = {
             # Vertical shifts for each level (fraction of capacity)
             "zone_level1b_vertical_shift": {
                 "baseline": 0.0,
-                "bounds": [-0.05, 0.05],
+                "bounds": [-0.10, 0.10],
                 "units": "fraction",
                 "description": "Vertical shift for level1b (Flood Warning) zone threshold"
             },
             "zone_level1c_vertical_shift": {
                 "baseline": 0.0,
-                "bounds": [-0.05, 0.05],
+                "bounds": [-0.10, 0.10],
                 "units": "fraction",
                 "description": "Vertical shift for level1c (Flood Watch) zone threshold"
             },
             "zone_level2_vertical_shift": {
                 "baseline": 0.0,
-                "bounds": [-0.05, 0.05],
+                "bounds": [-0.10, 0.10],
                 "units": "fraction",
                 "description": "Vertical shift for level2 (Normal) zone threshold"
             },
             "zone_level3_vertical_shift": {
                 "baseline": 0.0,
-                "bounds": [-0.05, 0.05],
+                "bounds": [-0.10, 0.10],
                 "units": "fraction",
                 "description": "Vertical shift for level3 (Drought Watch) zone threshold"
             },
             "zone_level4_vertical_shift": {
                 "baseline": 0.0,
-                "bounds": [-0.05, 0.05],
+                "bounds": [-0.10, 0.10],
                 "units": "fraction",
                 "description": "Vertical shift for level4 (Drought Warning) zone threshold"
             },
             "zone_level5_vertical_shift": {
                 "baseline": 0.0,
-                "bounds": [-0.05, 0.05],
+                "bounds": [-0.10, 0.10],
                 "units": "fraction",
                 "description": "Vertical shift for level5 (Drought Emergency) zone threshold"
             },
@@ -448,11 +444,10 @@ def print_config_summary():
 
 # List of metrics to calculate (can be extended)
 METRICS_TO_CALCULATE = [
-    "montague_min_flow_mgd",
-    "pct_time_drought_watch",
-    "pct_time_drought_warning",
-    "pct_time_drought_emergency",
-    "nyc_min_storage_pct",
+    "montague_flow_3day_min_mgd",    # Ecological flow protection
+    "nyc_min_storage_pct",            # Water supply vulnerability
+    "nyc_monthly_delivery_min_mg",    # Water supply reliability
+    "pct_time_drought_emergency",     # Drought resilience
 ]
 
 

@@ -123,7 +123,7 @@ class MRFProfileBuilder:
             raise ValueError(f"Unknown profile: {profile_name}")
 
         base = self.base_profiles[profile_name].copy()
-        modified = np.zeros(366)
+        modified = base.copy()  # Start with base values to avoid zeros in gaps
 
         for season_name, season_def in DEFAULT_SEASONS.items():
             shift = season_shifts.get(season_name, 0)

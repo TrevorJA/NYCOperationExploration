@@ -43,6 +43,7 @@ from config import (
 )
 
 
+
 def main():
     """Generate pre-simulated releases for trimmed model mode."""
 

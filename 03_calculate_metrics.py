@@ -16,7 +16,7 @@ from pathlib import Path
 # Add methods to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import METRICS_TO_CALCULATE, SIMULATIONS_DIR, METRICS_DIR, PRESIM_DIR
+from config import METRICS_TO_CALCULATE, SIMULATIONS_DIR, METRICS_DIR, PRESIM_DIR, START_DATE, END_DATE
 from methods.metrics import (
     calculate_all_metrics,
     calculate_sample_metrics,
@@ -31,6 +31,9 @@ BASELINE_OUTPUT_FILE = PRESIM_DIR / "full_model_baseline_output.hdf5"
 def calculate_baseline_metrics():
     """
     Calculate and save baseline metrics from the pre-simulated baseline run.
+
+    Uses START_DATE and END_DATE from config to ensure consistency with sample simulations.
+    The baseline simulation data is trimmed to match the config date range.
 
     Returns
     -------
@@ -47,12 +50,15 @@ def calculate_baseline_metrics():
 
     print("\nCalculating baseline metrics...")
     print(f"  Source: {BASELINE_OUTPUT_FILE}")
+    print(f"  Trimming data to config date range: {START_DATE} to {END_DATE}")
 
     try:
         baseline_metrics = calculate_sample_metrics(
             sample_id=-1,  # Use -1 to indicate baseline
             output_file=str(BASELINE_OUTPUT_FILE),
-            metrics=METRICS_TO_CALCULATE
+            metrics=METRICS_TO_CALCULATE,
+            start_date=START_DATE,
+            end_date=END_DATE
         )
 
         # Remove sample_id for cleaner output

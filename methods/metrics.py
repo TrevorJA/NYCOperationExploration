@@ -35,9 +35,9 @@ from config import (
 # METRIC CALCULATION FUNCTIONS
 # =============================================================================
 
-def calculate_montague_min_flow(data: dict) -> float:
+def calculate_montague_flow_3day_min(data: dict) -> float:
     """
-    Calculate minimum daily flow at Montague.
+    Calculate minimum 3-day rolling average flow at Montague.
 
     Parameters
     ----------
@@ -46,15 +46,16 @@ def calculate_montague_min_flow(data: dict) -> float:
 
     Returns
     -------
-    float : Minimum Montague flow in MGD
+    float : Minimum 3-day rolling average Montague flow in MGD
     """
     montague_flow = data["major_flow"]["delMontague"]
-    return float(montague_flow.min())
+    rolling_3day = montague_flow.rolling(window=3, min_periods=3).mean()
+    return float(rolling_3day.min())
 
 
-def calculate_pct_time_drought_watch(data: dict) -> float:
+def calculate_nyc_monthly_delivery_min(data: dict) -> float:
     """
-    Calculate percentage of time in Drought Watch or worse (zones 5-6).
+    Calculate minimum monthly total NYC delivery.
 
     Parameters
     ----------
@@ -63,31 +64,11 @@ def calculate_pct_time_drought_watch(data: dict) -> float:
 
     Returns
     -------
-    float : Percentage of days in Drought Watch or worse
+    float : Minimum monthly NYC delivery in MG
     """
-    nyc_zone = data["res_level"]["nyc"]
-    n_days = len(nyc_zone)
-    n_watch_or_worse = (nyc_zone >= 5).sum()
-    return 100.0 * float(n_watch_or_worse) / n_days
-
-
-def calculate_pct_time_drought_warning(data: dict) -> float:
-    """
-    Calculate percentage of time in Drought Warning or worse (zones 4-6).
-
-    Parameters
-    ----------
-    data : dict
-        Dictionary containing loaded simulation data
-
-    Returns
-    -------
-    float : Percentage of days in Drought Warning or worse
-    """
-    nyc_zone = data["res_level"]["nyc"]
-    n_days = len(nyc_zone)
-    n_warning_or_worse = (nyc_zone >= 4).sum()
-    return 100.0 * float(n_warning_or_worse) / n_days
+    nyc_delivery = data["ibt_diversions"]["delivery_nyc"]
+    monthly_totals = nyc_delivery.resample('M').sum()
+    return float(monthly_totals.min())
 
 
 def calculate_pct_time_drought_emergency(data: dict) -> float:
@@ -134,11 +115,10 @@ def calculate_nyc_min_storage_pct(data: dict) -> float:
 # Register all metric functions here
 # Key = metric name, Value = function that takes data dict and returns float
 METRIC_FUNCTIONS = {
-    "montague_min_flow_mgd": calculate_montague_min_flow,
-    "pct_time_drought_watch": calculate_pct_time_drought_watch,
-    "pct_time_drought_warning": calculate_pct_time_drought_warning,
-    "pct_time_drought_emergency": calculate_pct_time_drought_emergency,
+    "montague_flow_3day_min_mgd": calculate_montague_flow_3day_min,
     "nyc_min_storage_pct": calculate_nyc_min_storage_pct,
+    "nyc_monthly_delivery_min_mg": calculate_nyc_monthly_delivery_min,
+    "pct_time_drought_emergency": calculate_pct_time_drought_emergency,
 }
 
 
@@ -146,7 +126,8 @@ METRIC_FUNCTIONS = {
 # DATA LOADING
 # =============================================================================
 
-def load_simulation_data(output_file: str) -> dict:
+def load_simulation_data(output_file: str, start_date: str = None, end_date: str = None,
+                         warmup_days: int = 7) -> dict:
     """
     Load simulation output data needed for metric calculations.
 
@@ -154,16 +135,25 @@ def load_simulation_data(output_file: str) -> dict:
     ----------
     output_file : str
         Path to HDF5 output file
+    start_date : str, optional
+        Start date to filter data (format: YYYY-MM-DD). If None, use all data.
+    end_date : str, optional
+        End date to filter data (format: YYYY-MM-DD). If None, use all data.
+    warmup_days : int, optional
+        Number of days to skip at the start for model warmup. Default is 7.
 
     Returns
     -------
     dict : Dictionary containing loaded data series
     """
+    import pandas as pd
+    from datetime import timedelta
+
     # Load data using pywrdrb
     data_obj = pywrdrb.Data()
 
     # Load required results sets
-    results_sets = ['major_flow', 'res_storage', 'res_level']
+    results_sets = ['major_flow', 'res_storage', 'res_level', 'ibt_diversions']
 
     data_obj.load_output(
         output_filenames=[output_file],
@@ -179,7 +169,30 @@ def load_simulation_data(output_file: str) -> dict:
         "major_flow": data_obj.major_flow[dataset_key][realization],
         "res_storage": data_obj.res_storage[dataset_key][realization],
         "res_level": data_obj.res_level[dataset_key][realization],
+        "ibt_diversions": data_obj.ibt_diversions[dataset_key][realization],
     }
+
+    # Determine start date with warmup offset
+    if start_date is not None:
+        start_dt = pd.to_datetime(start_date) + timedelta(days=warmup_days)
+    elif warmup_days > 0:
+        # Apply warmup to actual data start
+        first_date = data["major_flow"].index.min()
+        start_dt = first_date + timedelta(days=warmup_days)
+    else:
+        start_dt = None
+
+    end_dt = pd.to_datetime(end_date) if end_date else None
+
+    # Filter to date range
+    if start_dt is not None or end_dt is not None:
+        for key in data:
+            df = data[key]
+            if start_dt is not None:
+                df = df[df.index >= start_dt]
+            if end_dt is not None:
+                df = df[df.index <= end_dt]
+            data[key] = df
 
     return data
 
@@ -189,7 +202,9 @@ def load_simulation_data(output_file: str) -> dict:
 # =============================================================================
 
 def calculate_sample_metrics(sample_id: int, output_file: str,
-                             metrics: list = None) -> dict:
+                             metrics: list = None,
+                             start_date: str = None,
+                             end_date: str = None) -> dict:
     """
     Calculate all performance metrics for a single simulation sample.
 
@@ -201,6 +216,10 @@ def calculate_sample_metrics(sample_id: int, output_file: str,
         Path to HDF5 output file
     metrics : list, optional
         List of metric names to calculate. If None, uses METRICS_TO_CALCULATE from config.
+    start_date : str, optional
+        Start date to filter data (format: YYYY-MM-DD). If None, use all data.
+    end_date : str, optional
+        End date to filter data (format: YYYY-MM-DD). If None, use all data.
 
     Returns
     -------
@@ -213,7 +232,7 @@ def calculate_sample_metrics(sample_id: int, output_file: str,
 
     try:
         # Load simulation data
-        data = load_simulation_data(output_file)
+        data = load_simulation_data(output_file, start_date=start_date, end_date=end_date)
 
         # Calculate each metric
         for metric_name in metrics:
