@@ -24,6 +24,55 @@ from config import FIGURES_DIR, PARAMETER_GROUPS
 DPI_HIGH = 300
 FIGSIZE_DEFAULT = (10, 6)
 
+# =============================================================================
+# RADIAL SENSITIVITY PLOT SETTINGS
+# =============================================================================
+
+# Radial plot scaling constants
+S1_MIN_SIZE = 50      # min marker area (points^2)
+S1_MAX_SIZE = 800     # max marker area
+RING_MIN_SIZE = 80    # min ring size
+RING_MAX_SIZE = 1200  # max ring size
+S2_MIN_WIDTH = 0.5    # min line width
+S2_MAX_WIDTH = 6.0    # max line width
+
+# Radial plot colors (matching reference figure)
+RADIAL_MARKER_COLOR = '#800000'  # maroon
+RADIAL_RING_COLOR = '#800000'    # maroon
+RADIAL_LINE_COLOR = '#000080'    # navy blue
+
+# Parameter name shorthand dictionary for radial plots
+PARAM_SHORT_NAMES = {
+    # Individual MRF
+    'mrf_cannonsville': 'MRF\nCan',
+    'mrf_pepacton': 'MRF\nPep',
+    'mrf_neversink': 'MRF\nNev',
+    # MRF Factor Profiles - shifts
+    'mrf_summer_start_shift': 'Summer\nStart',
+    'mrf_fall_start_shift': 'Fall\nStart',
+    'mrf_winter_start_shift': 'Winter\nStart',
+    'mrf_spring_start_shift': 'Spring\nStart',
+    # MRF Factor Profiles - scales
+    'mrf_summer_scale': 'Summer\nScale',
+    'mrf_fall_scale': 'Fall\nScale',
+    'mrf_winter_scale': 'Winter\nScale',
+    'mrf_spring_scale': 'Spring\nScale',
+    # Storage Zones - vertical shifts
+    'zone_level1b_vertical_shift': 'L1b\nv-shift',
+    'zone_level1c_vertical_shift': 'L1c\nv-shift',
+    'zone_level2_vertical_shift': 'L2\nv-shift',
+    'zone_level3_vertical_shift': 'L3\nv-shift',
+    'zone_level4_vertical_shift': 'L4\nv-shift',
+    'zone_level5_vertical_shift': 'L5\nv-shift',
+    # Storage Zones - time shifts
+    'zone_level1b_time_shift': 'L1b\nt-shift',
+    'zone_level1c_time_shift': 'L1c\nt-shift',
+    'zone_level2_time_shift': 'L2\nt-shift',
+    'zone_level3_time_shift': 'L3\nt-shift',
+    'zone_level4_time_shift': 'L4\nt-shift',
+    'zone_level5_time_shift': 'L5\nt-shift',
+}
+
 
 def get_parameter_colors():
     """Get color mapping for parameter groups."""
@@ -40,6 +89,205 @@ def get_parameter_colors():
             param_colors[param_name] = colors.get(group_name, "#7f7f7f")
 
     return param_colors
+
+
+# =============================================================================
+# RADIAL SENSITIVITY PLOT HELPER FUNCTIONS
+# =============================================================================
+
+def get_short_param_name(name: str) -> str:
+    """
+    Get shortened parameter name for radial plot labels.
+
+    Parameters
+    ----------
+    name : str
+        Full parameter name
+
+    Returns
+    -------
+    str
+        Shortened name from PARAM_SHORT_NAMES or original if not found
+    """
+    return PARAM_SHORT_NAMES.get(name, name)
+
+
+def _get_grouped_param_order(param_names: list) -> tuple:
+    """
+    Get parameter indices ordered by group for radial layout.
+
+    Parameters
+    ----------
+    param_names : list
+        List of parameter names
+
+    Returns
+    -------
+    tuple : (ordered_indices, group_boundaries)
+        - ordered_indices: list of indices into param_names in group order
+        - group_boundaries: list of (start_idx, end_idx, group_name) tuples
+    """
+    group_order = ["individual_mrf", "mrf_factor_profiles", "storage_zones"]
+    ordered_indices = []
+    group_boundaries = []
+
+    for group_name in group_order:
+        if group_name in PARAMETER_GROUPS and PARAMETER_GROUPS[group_name]["enabled"]:
+            group_params = list(PARAMETER_GROUPS[group_name]["parameters"].keys())
+            start_idx = len(ordered_indices)
+            for p in group_params:
+                if p in param_names:
+                    ordered_indices.append(param_names.index(p))
+            if len(ordered_indices) > start_idx:
+                group_boundaries.append((start_idx, len(ordered_indices), group_name))
+
+    # Add any remaining parameters not in groups
+    for i, p in enumerate(param_names):
+        if i not in ordered_indices:
+            ordered_indices.append(i)
+
+    return ordered_indices, group_boundaries
+
+
+def _calculate_radial_positions(n_params: int, radius: float = 1.0,
+                                 start_angle: float = 90.0,
+                                 group_boundaries: list = None,
+                                 gap_angle: float = 15.0) -> tuple:
+    """
+    Calculate (x, y) positions for parameters on a circle.
+
+    Parameters arranged counter-clockwise starting from top (90 degrees).
+    Adds gaps between parameter groups if boundaries provided.
+
+    Parameters
+    ----------
+    n_params : int
+        Number of parameters
+    radius : float
+        Radius of the circle
+    start_angle : float
+        Starting angle in degrees (90 = top)
+    group_boundaries : list, optional
+        List of (start_idx, end_idx, group_name) tuples
+    gap_angle : float
+        Angle in degrees to add between groups
+
+    Returns
+    -------
+    tuple : (x, y, angles)
+        - x: array of x positions
+        - y: array of y positions
+        - angles: array of angles in degrees
+    """
+    if group_boundaries and len(group_boundaries) > 1:
+        n_gaps = len(group_boundaries)
+        total_gap = gap_angle * n_gaps
+        available_arc = 360 - total_gap
+        angle_per_param = available_arc / n_params
+    else:
+        angle_per_param = 360 / n_params
+        group_boundaries = []
+
+    angles = []
+    current_angle = start_angle
+
+    # Track which indices start a new group
+    group_starts = {gb[0] for gb in group_boundaries}
+
+    for i in range(n_params):
+        # Add gap before group start (except first)
+        if i in group_starts and i > 0:
+            current_angle -= gap_angle
+
+        angles.append(current_angle)
+        current_angle -= angle_per_param
+
+    angles = np.array(angles)
+    angles_rad = np.deg2rad(angles)
+    x = radius * np.cos(angles_rad)
+    y = radius * np.sin(angles_rad)
+
+    return x, y, angles
+
+
+def _add_radial_legend(fig, ax, s1_min: float, s1_max: float,
+                       st_min: float, st_max: float,
+                       s2_min: float, s2_max: float):
+    """
+    Add legend panel below the radial plot showing scale for S1, ST, and S2.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure object
+    ax : matplotlib.axes.Axes
+        Main plot axes
+    s1_min, s1_max : float
+        Range of S1 values in data
+    st_min, st_max : float
+        Range of ST values in data
+    s2_min, s2_max : float
+        Range of S2 values in data (absolute)
+    """
+    from matplotlib.patches import Circle
+    from matplotlib.lines import Line2D
+
+    # Create legend axes at bottom of figure
+    legend_ax = fig.add_axes([0.1, 0.02, 0.8, 0.15])
+    legend_ax.set_xlim(0, 10)
+    legend_ax.set_ylim(0, 3)
+    legend_ax.axis('off')
+
+    # === First-Order Sensitivities (S1) - filled circles ===
+    legend_ax.text(1.5, 2.7, "First-Order Sensitivities", ha='center',
+                   fontsize=10, fontweight='bold')
+
+    # Show min and max values with sizes
+    s1_legend_vals = [s1_min, (s1_min + s1_max) / 2, s1_max]
+    s1_legend_vals = [v for v in s1_legend_vals if v > 0.001]  # Filter near-zero
+    if not s1_legend_vals:
+        s1_legend_vals = [0.01, 0.1]
+
+    for i, val in enumerate(s1_legend_vals[:3]):
+        norm_val = (val - s1_min) / (s1_max - s1_min) if s1_max > s1_min else 0.5
+        size = S1_MIN_SIZE + norm_val * (S1_MAX_SIZE - S1_MIN_SIZE)
+        x_pos = 0.5 + i * 1.0
+        legend_ax.scatter(x_pos, 1.5, s=size, c=RADIAL_MARKER_COLOR, alpha=0.85)
+        legend_ax.text(x_pos, 0.6, f"{val*100:.0f}%", ha='center', fontsize=8)
+
+    # === Total-Order Sensitivities (ST) - rings ===
+    legend_ax.text(5, 2.7, "Total-Order Sensitivities", ha='center',
+                   fontsize=10, fontweight='bold')
+
+    st_legend_vals = [st_min, (st_min + st_max) / 2, st_max]
+    st_legend_vals = [v for v in st_legend_vals if v > 0.001]
+    if not st_legend_vals:
+        st_legend_vals = [0.01, 0.1]
+
+    for i, val in enumerate(st_legend_vals[:3]):
+        norm_val = (val - st_min) / (st_max - st_min) if st_max > st_min else 0.5
+        size = RING_MIN_SIZE + norm_val * (RING_MAX_SIZE - RING_MIN_SIZE)
+        x_pos = 4 + i * 1.0
+        legend_ax.scatter(x_pos, 1.5, s=size, facecolors='none',
+                         edgecolors=RADIAL_RING_COLOR, linewidths=2)
+        legend_ax.text(x_pos, 0.6, f"{val*100:.0f}%", ha='center', fontsize=8)
+
+    # === Second-Order Interactions (S2) - lines ===
+    legend_ax.text(8.5, 2.7, "Second-Order Sensitivities", ha='center',
+                   fontsize=10, fontweight='bold')
+
+    s2_legend_vals = [s2_min, (s2_min + s2_max) / 2, s2_max]
+    s2_legend_vals = [v for v in s2_legend_vals if v > 0.001]
+    if not s2_legend_vals:
+        s2_legend_vals = [0.01, 0.1]
+
+    for i, val in enumerate(s2_legend_vals[:3]):
+        norm_val = (val - s2_min) / (s2_max - s2_min) if s2_max > s2_min else 0.5
+        width = S2_MIN_WIDTH + norm_val * (S2_MAX_WIDTH - S2_MIN_WIDTH)
+        x_pos = 7.5 + i * 1.0
+        legend_ax.plot([x_pos - 0.3, x_pos + 0.3], [1.5, 1.5],
+                      color=RADIAL_LINE_COLOR, linewidth=width, alpha=0.7)
+        legend_ax.text(x_pos, 0.6, f"{val*100:.0f}%", ha='center', fontsize=8)
 
 
 def plot_sobol_bars(sobol_results: dict, metric: str,
@@ -438,7 +686,203 @@ def generate_all_figures(sobol_results: dict, metrics: list = None):
             plot_interaction_matrix(sobol_results, metric, save=True)
             plt.close()
 
+    # Radial sensitivity plots (if S2 available)
+    print("\nGenerating radial sensitivity plots...")
+    for metric in metrics:
+        if "S2" in sobol_results.get(metric, {}):
+            plot_radial_sensitivity(sobol_results, metric, save=True)
+            plt.close()
+
     print(f"\nAll figures saved to {FIGURES_DIR}")
+
+
+# =============================================================================
+# RADIAL SENSITIVITY PLOT
+# =============================================================================
+
+def plot_radial_sensitivity(
+    sobol_results: dict,
+    metric: str,
+    s2_threshold: float = 0.01,
+    figsize: tuple = (12, 14),
+    save: bool = True,
+    filename: str = None,
+    title: str = None
+) -> tuple:
+    """
+    Create radial/chord-style sensitivity visualization.
+
+    Parameters arranged in a circle with:
+    - Filled marker size proportional to S1 (first-order sensitivity)
+    - Outer ring radius proportional to ST (total-order sensitivity)
+    - Line thickness between parameters proportional to |S2| (interactions)
+
+    Parameters
+    ----------
+    sobol_results : dict
+        Output from calculate_sobol_indices (raw format)
+    metric : str
+        Metric name to visualize
+    s2_threshold : float
+        Minimum |S2| value to draw interaction lines (default: 0.01)
+    figsize : tuple
+        Figure size (default: (12, 14) for main plot + legend)
+    save : bool
+        If True, save figure to FIGURES_DIR
+    filename : str, optional
+        Custom filename (without extension). Default: radial_{metric}
+    title : str, optional
+        Custom title. Default: metric name
+
+    Returns
+    -------
+    tuple : (fig, ax) or None if metric not found/invalid
+    """
+    # === Data Extraction and Validation ===
+    if metric not in sobol_results:
+        print(f"Error: Metric '{metric}' not found in sobol_results")
+        return None
+
+    if "error" in sobol_results[metric]:
+        print(f"Error: Results for '{metric}' contain errors")
+        return None
+
+    indices = sobol_results[metric]
+    param_names = indices["parameter_names"]
+    n_params = len(param_names)
+
+    S1 = np.array(indices["S1"])
+    ST = np.array(indices["ST"])
+    S2 = np.array(indices.get("S2", np.zeros((n_params, n_params))))
+
+    # Check for NaN values - report error and return
+    if np.any(np.isnan(S1)):
+        print(f"Error: S1 contains NaN values for metric '{metric}'. Cannot plot.")
+        return None
+    if np.any(np.isnan(ST)):
+        print(f"Error: ST contains NaN values for metric '{metric}'. Cannot plot.")
+        return None
+
+    # S2 may have NaN on diagonal, that's okay - check off-diagonal
+    S2_offdiag = S2.copy()
+    np.fill_diagonal(S2_offdiag, 0)
+    if np.any(np.isnan(S2_offdiag)):
+        print(f"Error: S2 contains NaN values for metric '{metric}'. Cannot plot.")
+        return None
+
+    # Ensure non-negative (clip small numerical artifacts)
+    S1 = np.maximum(S1, 0)
+    ST = np.maximum(ST, 0)
+
+    # === Group and Order Parameters ===
+    ordered_indices, group_boundaries = _get_grouped_param_order(param_names)
+    ordered_params = [param_names[i] for i in ordered_indices]
+    ordered_S1 = S1[ordered_indices]
+    ordered_ST = ST[ordered_indices]
+    ordered_S2 = S2[np.ix_(ordered_indices, ordered_indices)]
+
+    # === Calculate Circular Positions ===
+    radius = 1.0
+    x, y, angles = _calculate_radial_positions(
+        n_params, radius, start_angle=90.0,
+        group_boundaries=group_boundaries, gap_angle=12.0
+    )
+
+    # === Calculate Scaling ===
+    s1_min, s1_max = ordered_S1.min(), max(ordered_S1.max(), 0.01)
+    st_min, st_max = ordered_ST.min(), max(ordered_ST.max(), 0.01)
+
+    # Use absolute value for S2, ignoring diagonal
+    S2_abs = np.abs(ordered_S2)
+    np.fill_diagonal(S2_abs, 0)
+    s2_significant = S2_abs[S2_abs > s2_threshold]
+    s2_min = s2_significant.min() if len(s2_significant) > 0 else 0.01
+    s2_max = max(S2_abs.max(), 0.01)
+
+    # Scale S1 to marker sizes
+    s1_normalized = (ordered_S1 - s1_min) / (s1_max - s1_min) if s1_max > s1_min else np.ones(n_params) * 0.5
+    marker_sizes = S1_MIN_SIZE + s1_normalized * (S1_MAX_SIZE - S1_MIN_SIZE)
+
+    # Scale ST to ring sizes
+    st_normalized = (ordered_ST - st_min) / (st_max - st_min) if st_max > st_min else np.ones(n_params) * 0.5
+    ring_sizes = RING_MIN_SIZE + st_normalized * (RING_MAX_SIZE - RING_MIN_SIZE)
+
+    # === Create Figure ===
+    fig = plt.figure(figsize=figsize)
+    # Main plot takes upper portion, leave room for legend
+    ax = fig.add_axes([0.05, 0.2, 0.9, 0.75])
+    ax.set_aspect('equal')
+
+    # === Draw S2 Interaction Lines (Bottom Layer) ===
+    for i in range(n_params):
+        for j in range(i + 1, n_params):  # Upper triangle only
+            s2_val = S2_abs[i, j]
+            if s2_val > s2_threshold:
+                # Scale line width
+                s2_normalized = (s2_val - s2_min) / (s2_max - s2_min) if s2_max > s2_min else 0.5
+                line_width = S2_MIN_WIDTH + s2_normalized * (S2_MAX_WIDTH - S2_MIN_WIDTH)
+                # Alpha based on strength
+                alpha = 0.3 + 0.5 * s2_normalized
+                ax.plot([x[i], x[j]], [y[i], y[j]],
+                       color=RADIAL_LINE_COLOR, linewidth=line_width,
+                       alpha=alpha, zorder=1)
+
+    # === Draw ST Rings (Middle Layer) ===
+    for i in range(n_params):
+        ax.scatter(x[i], y[i], s=ring_sizes[i],
+                  facecolors='none', edgecolors=RADIAL_RING_COLOR,
+                  linewidths=2.5, zorder=2)
+
+    # === Draw S1 Markers (Top Layer) ===
+    for i in range(n_params):
+        ax.scatter(x[i], y[i], s=marker_sizes[i],
+                  c=RADIAL_MARKER_COLOR, alpha=0.85, zorder=3)
+
+    # === Add Parameter Labels ===
+    label_radius = radius * 1.25
+    for i, param in enumerate(ordered_params):
+        angle_rad = np.deg2rad(angles[i])
+        lx = label_radius * np.cos(angle_rad)
+        ly = label_radius * np.sin(angle_rad)
+
+        # Get shortened name
+        short_name = get_short_param_name(param)
+
+        # Determine text alignment based on position
+        angle = angles[i]
+        if -90 <= angle <= 90:
+            ha = 'left'
+            rotation = angle
+        else:
+            ha = 'right'
+            rotation = angle + 180
+
+        ax.annotate(short_name, (lx, ly),
+                   ha=ha, va='center', fontsize=9,
+                   rotation=rotation, rotation_mode='anchor')
+
+    # === Clean Up Axes ===
+    ax.set_xlim(-1.9, 1.9)
+    ax.set_ylim(-1.9, 1.9)
+    ax.axis('off')
+
+    # === Add Title ===
+    plot_title = title if title else metric
+    ax.set_title(plot_title, fontsize=14, fontweight='bold', y=1.02)
+
+    # === Add Legend ===
+    _add_radial_legend(fig, ax, s1_min, s1_max, st_min, st_max, s2_min, s2_max)
+
+    # === Save Figure ===
+    if save:
+        if filename is None:
+            filename = f"radial_{metric}"
+        filepath = FIGURES_DIR / f"{filename}.png"
+        plt.savefig(filepath, dpi=DPI_HIGH, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
+        print(f"Saved: {filepath}")
+
+    return fig, ax
 
 
 # =============================================================================
