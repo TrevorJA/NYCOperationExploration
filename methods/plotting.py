@@ -755,7 +755,7 @@ def plot_radial_sensitivity(
     ST = np.array(indices["ST"])
     S2 = np.array(indices.get("S2", np.zeros((n_params, n_params))))
 
-    # Check for NaN values - report error and return
+    # Check for NaN values in S1 and ST - these indicate incomplete analysis
     if np.any(np.isnan(S1)):
         print(f"Error: S1 contains NaN values for metric '{metric}'. Cannot plot.")
         return None
@@ -763,12 +763,11 @@ def plot_radial_sensitivity(
         print(f"Error: ST contains NaN values for metric '{metric}'. Cannot plot.")
         return None
 
-    # S2 may have NaN on diagonal, that's okay - check off-diagonal
-    S2_offdiag = S2.copy()
-    np.fill_diagonal(S2_offdiag, 0)
-    if np.any(np.isnan(S2_offdiag)):
-        print(f"Error: S2 contains NaN values for metric '{metric}'. Cannot plot.")
-        return None
+    # S2 matrix from SALib has NaN values by design:
+    # - Diagonal (S2[i,i]): NaN because self-interaction is meaningless
+    # - Lower triangle: NaN because SALib only fills upper triangle (S2 is symmetric)
+    # We treat these NaN values as 0 interaction for plotting purposes
+    S2 = np.nan_to_num(S2, nan=0.0)
 
     # Ensure non-negative (clip small numerical artifacts)
     S1 = np.maximum(S1, 0)
